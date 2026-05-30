@@ -1,7 +1,6 @@
 package com.example.cassandraui.service;
 
 import com.datastax.oss.driver.api.core.CqlIdentifier;
-import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.ColumnDefinitions;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
@@ -9,110 +8,112 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.example.cassandraui.dto.DataPageResponse;
 import com.example.cassandraui.exception.BadRequestException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 import org.springframework.stereotype.Service;
 
 @Service
 public class CassandraDataService {
-    private static final int MAX_PAGE_SIZE = 500;
+  private static final int FIRST_PAGE = 0;
+  private static final int MAX_PAGE_SIZE = 500;
+  private static final int MIN_PAGE_SIZE = 1;
+  private static final int DEFAULT_QUERY_PAGE_SIZE = 100;
+  private static final String PAGE_SIZE_ERROR = "Page size must be greater than zero.";
+  private static final String SELECT_ALL_FROM = "SELECT * FROM ";
+  private static final String CQL_QUALIFIER = ".";
+  private static final String HEX_PREFIX = "0x";
+  private static final boolean QUOTE_IDENTIFIERS = true;
+  private static final boolean SEQUENTIAL_STREAM = false;
 
-    private final ConnectionService connectionService;
-    private final QueryValidator queryValidator;
+  private final ConnectionService connectionService;
+  private final QueryValidator queryValidator;
 
-    public CassandraDataService(ConnectionService connectionService, QueryValidator queryValidator) {
-        this.connectionService = connectionService;
-        this.queryValidator = queryValidator;
+  public CassandraDataService(ConnectionService connectionService, QueryValidator queryValidator) {
+    this.connectionService = connectionService;
+    this.queryValidator = queryValidator;
+  }
+
+  public DataPageResponse tableData(String keyspace, String table, int page, int size) {
+    var pageSize = normalizeSize(size);
+    var normalizedPage = Math.max(page, FIRST_PAGE);
+    var query = SELECT_ALL_FROM + quote(keyspace) + CQL_QUALIFIER + quote(table);
+    var statement = SimpleStatement.builder(query).setPageSize(pageSize).build();
+    return executePaged(statement, normalizedPage, pageSize);
+  }
+
+  public DataPageResponse select(String query, Integer pageSize) {
+    var validated = queryValidator.validateSelectOnly(query);
+    var normalizedSize = normalizeSize(pageSize == null ? DEFAULT_QUERY_PAGE_SIZE : pageSize);
+    var statement = SimpleStatement.builder(validated).setPageSize(normalizedSize).build();
+    return executePaged(statement, FIRST_PAGE, normalizedSize);
+  }
+
+  private DataPageResponse executePaged(SimpleStatement statement, int page, int size) {
+    var session = connectionService.currentSession();
+    var resultSet = session.execute(statement);
+    for (var currentPage = FIRST_PAGE;
+        currentPage < page && resultSet.getExecutionInfo().getPagingState() != null;
+        currentPage++) {
+      resultSet =
+          session.execute(statement.setPagingState(resultSet.getExecutionInfo().getPagingState()));
     }
 
-    public DataPageResponse tableData(String keyspace, String table, int page, int size) {
-        int pageSize = normalizeSize(size);
-        int normalizedPage = Math.max(page, 0);
-        String query = "SELECT * FROM " + quote(keyspace) + "." + quote(table);
-        SimpleStatement statement = SimpleStatement.builder(query).setPageSize(pageSize).build();
-        return executePaged(statement, normalizedPage, pageSize);
+    var columns = columnNames(resultSet.getColumnDefinitions());
+    var data = rows(resultSet, size).stream().map(row -> rowToMap(row, columns)).toList();
+
+    return new DataPageResponse(
+        columns, data, page, size, resultSet.getExecutionInfo().getPagingState() != null);
+  }
+
+  private int normalizeSize(int size) {
+    if (size < MIN_PAGE_SIZE) {
+      throw new BadRequestException(PAGE_SIZE_ERROR);
     }
+    return Math.min(size, MAX_PAGE_SIZE);
+  }
 
-    public DataPageResponse select(String query, Integer pageSize) {
-        String validated = queryValidator.validateSelectOnly(query);
-        int normalizedSize = normalizeSize(pageSize == null ? 100 : pageSize);
-        SimpleStatement statement = SimpleStatement.builder(validated).setPageSize(normalizedSize).build();
-        return executePaged(statement, 0, normalizedSize);
+  private List<String> columnNames(ColumnDefinitions definitions) {
+    return StreamSupport.stream(definitions.spliterator(), SEQUENTIAL_STREAM)
+        .map(definition -> definition.getName().asInternal())
+        .toList();
+  }
+
+  private List<Row> rows(ResultSet resultSet, int size) {
+    return StreamSupport.stream(resultSet.spliterator(), SEQUENTIAL_STREAM).limit(size).toList();
+  }
+
+  private Map<String, Object> rowToMap(Row row, List<String> columns) {
+    return IntStream.range(0, columns.size())
+        .boxed()
+        .collect(
+            LinkedHashMap::new,
+            (values, index) -> values.put(columns.get(index), formatValue(row.getObject(index))),
+            LinkedHashMap::putAll);
+  }
+
+  private Object formatValue(Object value) {
+    if (value instanceof ByteBuffer buffer) {
+      var duplicate = buffer.asReadOnlyBuffer();
+      var bytes = new byte[duplicate.remaining()];
+      duplicate.get(bytes);
+      return HEX_PREFIX + java.util.HexFormat.of().formatHex(bytes);
     }
-
-    private DataPageResponse executePaged(SimpleStatement statement, int page, int size) {
-        CqlSession session = connectionService.currentSession();
-        ResultSet resultSet = session.execute(statement);
-        for (int currentPage = 0; currentPage < page && resultSet.getExecutionInfo().getPagingState() != null; currentPage++) {
-            resultSet = session.execute(statement.setPagingState(resultSet.getExecutionInfo().getPagingState()));
-        }
-
-        List<Row> rows = new ArrayList<>();
-        int count = 0;
-        for (Row row : resultSet) {
-            rows.add(row);
-            count++;
-            if (count >= size) {
-                break;
-            }
-        }
-
-        List<String> columns = columnNames(resultSet.getColumnDefinitions());
-        List<Map<String, Object>> data = rows.stream()
-                .map(row -> rowToMap(row, columns))
-                .toList();
-
-        return new DataPageResponse(columns, data, page, size, resultSet.getExecutionInfo().getPagingState() != null);
+    if (value instanceof Map<?, ?> map) {
+      var formatted = new LinkedHashMap<String, Object>();
+      map.forEach((key, mapValue) -> formatted.put(String.valueOf(key), formatValue(mapValue)));
+      return formatted;
     }
-
-    private int normalizeSize(int size) {
-        if (size < 1) {
-            throw new BadRequestException("Page size must be greater than zero.");
-        }
-        return Math.min(size, MAX_PAGE_SIZE);
+    if (value instanceof Collection<?> collection) {
+      return collection.stream().map(this::formatValue).toList();
     }
+    return value;
+  }
 
-    private List<String> columnNames(ColumnDefinitions definitions) {
-        List<String> columns = new ArrayList<>();
-        definitions.forEach(definition -> columns.add(definition.getName().asInternal()));
-        return columns;
-    }
-
-    private Map<String, Object> rowToMap(Row row, List<String> columns) {
-        Map<String, Object> values = new LinkedHashMap<>();
-        for (int i = 0; i < columns.size(); i++) {
-            Object value = row.getObject(i);
-            values.put(columns.get(i), formatValue(value));
-        }
-        return values;
-    }
-
-    private Object formatValue(Object value) {
-        if (value instanceof ByteBuffer buffer) {
-            ByteBuffer duplicate = buffer.asReadOnlyBuffer();
-            byte[] bytes = new byte[duplicate.remaining()];
-            duplicate.get(bytes);
-            return "0x" + java.util.HexFormat.of().formatHex(bytes);
-        }
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> formatted = new LinkedHashMap<>();
-            map.forEach((key, mapValue) -> formatted.put(String.valueOf(key), formatValue(mapValue)));
-            return formatted;
-        }
-        if (value instanceof Collection<?> collection) {
-            return collection.stream().map(this::formatValue).toList();
-        }
-        if (value instanceof String || value instanceof Number || value instanceof Boolean || value instanceof UUID) {
-            return value;
-        }
-        return value;
-    }
-
-    private String quote(String identifier) {
-        return CqlIdentifier.fromCql(identifier).asCql(true);
-    }
+  private String quote(String identifier) {
+    return CqlIdentifier.fromCql(identifier).asCql(QUOTE_IDENTIFIERS);
+  }
 }

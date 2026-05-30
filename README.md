@@ -29,34 +29,28 @@ Backend API is exposed at:
 http://localhost:8080
 ```
 
-## Compose Cassandra Connection Values
+## Cassandra Connection Values
 
-Use these values in the connection form when running through Docker Compose:
+Docker Compose starts only the Cassandra UI frontend and backend. Use the connection form to connect to an existing Cassandra instance.
 
 ```text
-Host: cassandra
+Host: your Cassandra host
 Port: 9042
-Datacenter: dc1
-Username: leave blank
-Password: leave blank
+Datacenter: your datacenter name
+Username: optional
+Password: optional
 Keyspace: optional
 ```
 
-If you run the frontend locally outside Docker and connect to the compose Cassandra port from your host machine:
+If Cassandra is running on your host machine and the backend is running in Docker Compose, use:
 
 ```text
-Host: localhost
+Host: host.docker.internal
 Port: 9042
-Datacenter: dc1
+Datacenter: your datacenter name
 ```
 
 ## Local Development
-
-Start Cassandra and the backend dependencies:
-
-```bash
-docker compose up cassandra
-```
 
 Run the backend:
 

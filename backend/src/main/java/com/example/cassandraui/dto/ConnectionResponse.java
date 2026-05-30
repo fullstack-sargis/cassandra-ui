@@ -1,4 +1,3 @@
 package com.example.cassandraui.dto;
 
-public record ConnectionResponse(boolean success, String message) {
-}
+public record ConnectionResponse(boolean success, String message) {}

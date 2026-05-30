@@ -12,32 +12,37 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    @ExceptionHandler(NotConnectedException.class)
-    public ResponseEntity<ErrorResponse> handleNotConnected(NotConnectedException ex) {
-        return error(ex.getMessage(), HttpStatus.CONFLICT);
-    }
+  private static final String CASSANDRA_ERROR_PREFIX = "Cassandra error: ";
+  private static final String UNEXPECTED_ERROR_PREFIX = "Unexpected error: ";
+  private static final String VALIDATION_ERROR_PREFIX = "Invalid request: ";
 
-    @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
-        return error(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
+  @ExceptionHandler(NotConnectedException.class)
+  public ResponseEntity<ErrorResponse> handleNotConnected(NotConnectedException ex) {
+    return error(ex.getMessage(), HttpStatus.CONFLICT);
+  }
 
-    @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class})
-    public ResponseEntity<ErrorResponse> handleValidation(Exception ex) {
-        return error("Invalid request: " + ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
+  @ExceptionHandler(BadRequestException.class)
+  public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
+    return error(ex.getMessage(), HttpStatus.BAD_REQUEST);
+  }
 
-    @ExceptionHandler(DriverException.class)
-    public ResponseEntity<ErrorResponse> handleDriver(DriverException ex) {
-        return error("Cassandra error: " + ex.getMessage(), HttpStatus.BAD_GATEWAY);
-    }
+  @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class})
+  public ResponseEntity<ErrorResponse> handleValidation(Exception ex) {
+    return error(VALIDATION_ERROR_PREFIX + ex.getMessage(), HttpStatus.BAD_REQUEST);
+  }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
-        return error("Unexpected error: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  @ExceptionHandler(DriverException.class)
+  public ResponseEntity<ErrorResponse> handleDriver(DriverException ex) {
+    return error(CASSANDRA_ERROR_PREFIX + ex.getMessage(), HttpStatus.BAD_GATEWAY);
+  }
 
-    private ResponseEntity<ErrorResponse> error(String message, HttpStatus status) {
-        return ResponseEntity.status(status).body(new ErrorResponse(message, status.value(), Instant.now()));
-    }
+  @ExceptionHandler(Exception.class)
+  public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+    return error(UNEXPECTED_ERROR_PREFIX + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+
+  private ResponseEntity<ErrorResponse> error(String message, HttpStatus status) {
+    return ResponseEntity.status(status)
+        .body(new ErrorResponse(message, status.value(), Instant.now()));
+  }
 }

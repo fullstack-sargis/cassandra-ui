@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 public class CassandraUiApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(CassandraUiApplication.class, args);
-    }
+  public static void main(String[] args) {
+    SpringApplication.run(CassandraUiApplication.class, args);
+  }
 }

@@ -13,24 +13,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/keyspaces")
 public class MetadataController {
-    private final CassandraMetadataService metadataService;
+  private final CassandraMetadataService metadataService;
 
-    public MetadataController(CassandraMetadataService metadataService) {
-        this.metadataService = metadataService;
-    }
+  public MetadataController(CassandraMetadataService metadataService) {
+    this.metadataService = metadataService;
+  }
 
-    @GetMapping
-    public List<KeyspaceDto> keyspaces() {
-        return metadataService.keyspaces();
-    }
+  @GetMapping
+  public List<KeyspaceDto> keyspaces() {
+    return metadataService.keyspaces();
+  }
 
-    @GetMapping("/{keyspace}/tables")
-    public List<TableDto> tables(@PathVariable String keyspace) {
-        return metadataService.tables(keyspace);
-    }
+  @GetMapping("/{keyspace}/tables")
+  public List<TableDto> tables(@PathVariable String keyspace) {
+    return metadataService.tables(keyspace);
+  }
 
-    @GetMapping("/{keyspace}/tables/{table}/schema")
-    public TableSchemaResponse schema(@PathVariable String keyspace, @PathVariable String table) {
-        return metadataService.schema(keyspace, table);
-    }
+  @GetMapping("/{keyspace}/tables/{table}/schema")
+  public TableSchemaResponse schema(@PathVariable String keyspace, @PathVariable String table) {
+    return metadataService.schema(keyspace, table);
+  }
 }

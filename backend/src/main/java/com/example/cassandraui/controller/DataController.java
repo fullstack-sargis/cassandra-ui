@@ -13,23 +13,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class DataController {
-    private final CassandraDataService dataService;
+  private final CassandraDataService dataService;
 
-    public DataController(CassandraDataService dataService) {
-        this.dataService = dataService;
-    }
+  public DataController(CassandraDataService dataService) {
+    this.dataService = dataService;
+  }
 
-    @GetMapping("/api/keyspaces/{keyspace}/tables/{table}/data")
-    public DataPageResponse tableData(
-            @PathVariable String keyspace,
-            @PathVariable String table,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-        return dataService.tableData(keyspace, table, page, size);
-    }
+  @GetMapping("/api/keyspaces/{keyspace}/tables/{table}/data")
+  public DataPageResponse tableData(
+      @PathVariable String keyspace,
+      @PathVariable String table,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return dataService.tableData(keyspace, table, page, size);
+  }
 
-    @PostMapping("/api/query")
-    public DataPageResponse query(@Valid @RequestBody QueryRequest request) {
-        return dataService.select(request.query(), request.pageSize());
-    }
+  @PostMapping("/api/query")
+  public DataPageResponse query(@Valid @RequestBody QueryRequest request) {
+    return dataService.select(request.query(), request.pageSize());
+  }
 }
