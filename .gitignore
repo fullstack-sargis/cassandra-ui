@@ -1,0 +1,13 @@
+.DS_Store
+.idea/
+node_modules/
+dist/
+build/
+target/
+backend/.gradle/
+backend/build/
+*.log
+.env
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
