@@ -1,12 +1,18 @@
 package com.example.cassandraui.controller;
 
 import com.example.cassandraui.dto.KeyspaceDto;
+import com.example.cassandraui.dto.KeyspaceRequest;
+import com.example.cassandraui.dto.MutationResponse;
 import com.example.cassandraui.dto.TableDto;
 import com.example.cassandraui.dto.TableSchemaResponse;
 import com.example.cassandraui.service.CassandraMetadataService;
+import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,6 +28,19 @@ public class MetadataController {
   @GetMapping
   public List<KeyspaceDto> keyspaces() {
     return metadataService.keyspaces();
+  }
+
+  @PostMapping
+  public MutationResponse createKeyspace(@Valid @RequestBody KeyspaceRequest request) {
+    metadataService.createKeyspace(
+        request.name(), request.replicationFactor(), request.durableWrites());
+    return new MutationResponse("Keyspace created.");
+  }
+
+  @DeleteMapping("/{keyspace}")
+  public MutationResponse dropKeyspace(@PathVariable String keyspace) {
+    metadataService.dropKeyspace(keyspace);
+    return new MutationResponse("Keyspace dropped.");
   }
 
   @GetMapping("/{keyspace}/tables")

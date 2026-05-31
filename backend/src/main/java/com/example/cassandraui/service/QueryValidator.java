@@ -1,9 +1,6 @@
 package com.example.cassandraui.service;
 
 import com.example.cassandraui.exception.BadRequestException;
-import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,48 +13,18 @@ public class QueryValidator {
   private static final char SINGLE_QUOTE = '\'';
   private static final String BLANK_QUERY = "";
   private static final String BLANK_QUERY_ERROR = "Query cannot be blank.";
-  private static final String FORBIDDEN_QUERY_ERROR =
-      "Mutation and schema-changing queries are not allowed.";
-  private static final String MULTIPLE_STATEMENTS_ERROR =
-      "Only a single SELECT statement is allowed.";
-  private static final String SELECT_QUERY_ERROR = "Only SELECT queries are allowed.";
-  private static final String SELECT_PATTERN_SOURCE = "^\\s*select\\b";
-  private static final String FORBIDDEN_PATTERN_SOURCE =
-      "\\b(insert|update|delete|drop|truncate|alter|create)\\b";
-  private static final String INSERT = "insert";
-  private static final String UPDATE = "update";
-  private static final String DELETE = "delete";
-  private static final String DROP = "drop";
-  private static final String TRUNCATE = "truncate";
-  private static final String ALTER = "alter";
-  private static final String CREATE = "create";
-  private static final Pattern SELECT_PATTERN =
-      Pattern.compile(SELECT_PATTERN_SOURCE, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-  private static final Pattern FORBIDDEN_PATTERN =
-      Pattern.compile(FORBIDDEN_PATTERN_SOURCE, Pattern.CASE_INSENSITIVE);
-  private static final Set<String> FORBIDDEN_PREFIXES =
-      Set.of(INSERT, UPDATE, DELETE, DROP, TRUNCATE, ALTER, CREATE);
+  private static final String MULTIPLE_STATEMENTS_ERROR = "Only a single statement is allowed.";
 
-  public String validateSelectOnly(String query) {
+  public String validateAny(String query) {
     var trimmed = query == null ? BLANK_QUERY : query.trim();
     if (trimmed.isBlank()) {
       throw new BadRequestException(BLANK_QUERY_ERROR);
     }
 
     var singleStatement = stripSingleTrailingSemicolon(trimmed);
-    if (singleStatement.indexOf(SEMICOLON) >= FIRST_CHARACTER_INDEX) {
+    if (stripStringLiterals(singleStatement).indexOf(SEMICOLON) >= FIRST_CHARACTER_INDEX) {
       throw new BadRequestException(MULTIPLE_STATEMENTS_ERROR);
     }
-
-    var normalized = stripStringLiterals(singleStatement).toLowerCase(Locale.ROOT);
-    if (!SELECT_PATTERN.matcher(normalized).find()) {
-      throw new BadRequestException(SELECT_QUERY_ERROR);
-    }
-    if (FORBIDDEN_PATTERN.matcher(normalized).find()
-        || FORBIDDEN_PREFIXES.stream().anyMatch(normalized::startsWith)) {
-      throw new BadRequestException(FORBIDDEN_QUERY_ERROR);
-    }
-
     return singleStatement;
   }
 
@@ -73,6 +40,15 @@ public class QueryValidator {
     var inSingleQuote = false;
     for (var i = 0; i < query.length(); i++) {
       var ch = query.charAt(i);
+      if (inSingleQuote
+          && ch == SINGLE_QUOTE
+          && i + LAST_CHARACTER_OFFSET < query.length()
+          && query.charAt(i + LAST_CHARACTER_OFFSET) == SINGLE_QUOTE) {
+        sanitized.append(EMPTY_LITERAL_PLACEHOLDER);
+        sanitized.append(EMPTY_LITERAL_PLACEHOLDER);
+        i++;
+        continue;
+      }
       if (ch == SINGLE_QUOTE
           && (i == FIRST_CHARACTER_INDEX
               || query.charAt(i - LAST_CHARACTER_OFFSET) != ESCAPE_CHARACTER)) {

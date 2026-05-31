@@ -38,7 +38,8 @@ button:disabled {
 .connection-panel,
 .content-panel,
 .sidebar,
-.alert {
+.alert,
+.notice {
   border: 1px solid #dde4ea;
   background: #ffffff;
   box-shadow: 0 18px 45px rgba(27, 39, 51, 0.08);
@@ -113,6 +114,7 @@ textarea:focus {
 }
 
 .primary-button,
+.danger-button,
 .icon-button {
   align-items: center;
   border: 0;
@@ -130,6 +132,18 @@ textarea:focus {
   padding: 0 16px;
 }
 
+.compact-button {
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.danger-button {
+  background: #fee2e2;
+  color: #991b1b;
+  height: 38px;
+  width: 38px;
+}
+
 .icon-button {
   background: #eef3f8;
   color: #263746;
@@ -144,6 +158,16 @@ textarea:focus {
   color: #991b1b;
   display: flex;
   gap: 10px;
+  margin-top: 16px;
+  padding: 14px 16px;
+}
+
+.notice {
+  border-color: #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 14px;
+  font-weight: 800;
   margin-top: 16px;
   padding: 14px 16px;
 }
@@ -224,6 +248,30 @@ textarea:focus {
   font-size: 11px;
   font-weight: 800;
   padding: 3px 8px;
+}
+
+.keyspace-form {
+  border-top: 1px solid #e8edf2;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.checkbox-label {
+  align-items: center;
+  flex-direction: row;
+  font-weight: 700;
+}
+
+.checkbox-label input {
+  height: 16px;
+  width: 16px;
+}
+
+.keyspace-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .muted-block,

@@ -10,8 +10,12 @@ export function DataTable({ data, loading }: Props) {
     return <div className="empty-state">Loading data...</div>;
   }
 
-  if (!data || data.columns.length === 0) {
+  if (!data) {
     return <div className="empty-state">No data loaded</div>;
+  }
+
+  if (data.columns.length === 0) {
+    return <div className="empty-state">{data.message ?? 'No rows returned'}</div>;
   }
 
   return (

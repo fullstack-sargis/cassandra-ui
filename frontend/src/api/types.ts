@@ -12,6 +12,12 @@ export type Keyspace = {
   system: boolean;
 };
 
+export type KeyspaceRequest = {
+  name: string;
+  replicationFactor: number;
+  durableWrites: boolean;
+};
+
 export type Table = {
   name: string;
 };
@@ -35,4 +41,9 @@ export type DataPage = {
   page: number;
   size: number;
   hasMore: boolean;
+  message?: string;
+};
+
+export type MutationResponse = {
+  message: string;
 };

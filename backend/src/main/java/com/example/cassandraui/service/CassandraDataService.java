@@ -9,8 +9,9 @@ import com.example.cassandraui.dto.DataPageResponse;
 import com.example.cassandraui.exception.BadRequestException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
@@ -23,7 +24,11 @@ public class CassandraDataService {
   private static final int MIN_PAGE_SIZE = 1;
   private static final int DEFAULT_QUERY_PAGE_SIZE = 100;
   private static final String PAGE_SIZE_ERROR = "Page size must be greater than zero.";
+  private static final String STATEMENT_EXECUTED_MESSAGE = "Statement executed.";
   private static final String SELECT_ALL_FROM = "SELECT * FROM ";
+  private static final String CREATE_PREFIX = "create";
+  private static final String DROP_PREFIX = "drop";
+  private static final String ALTER_PREFIX = "alter";
   private static final String CQL_QUALIFIER = ".";
   private static final String HEX_PREFIX = "0x";
   private static final boolean QUOTE_IDENTIFIERS = true;
@@ -45,11 +50,19 @@ public class CassandraDataService {
     return executePaged(statement, normalizedPage, pageSize);
   }
 
-  public DataPageResponse select(String query, Integer pageSize) {
-    var validated = queryValidator.validateSelectOnly(query);
+  public DataPageResponse query(String query, Integer pageSize) {
+    var validated = queryValidator.validateAny(query);
     var normalizedSize = normalizeSize(pageSize == null ? DEFAULT_QUERY_PAGE_SIZE : pageSize);
     var statement = SimpleStatement.builder(validated).setPageSize(normalizedSize).build();
-    return executePaged(statement, FIRST_PAGE, normalizedSize);
+    var session = connectionService.currentSession();
+    var resultSet = session.execute(statement);
+    if (changesSchema(validated)) {
+      session.refreshSchemaAsync().toCompletableFuture().join();
+    }
+    return resultSet.getColumnDefinitions().size() == 0
+        ? new DataPageResponse(
+            List.of(), List.of(), FIRST_PAGE, normalizedSize, false, STATEMENT_EXECUTED_MESSAGE)
+        : pageFromResultSet(resultSet, FIRST_PAGE, normalizedSize);
   }
 
   private DataPageResponse executePaged(SimpleStatement statement, int page, int size) {
@@ -62,6 +75,10 @@ public class CassandraDataService {
           session.execute(statement.setPagingState(resultSet.getExecutionInfo().getPagingState()));
     }
 
+    return pageFromResultSet(resultSet, page, size);
+  }
+
+  private DataPageResponse pageFromResultSet(ResultSet resultSet, int page, int size) {
     var columns = columnNames(resultSet.getColumnDefinitions());
     var data = rows(resultSet, size).stream().map(row -> rowToMap(row, columns)).toList();
 
@@ -115,5 +132,12 @@ public class CassandraDataService {
 
   private String quote(String identifier) {
     return CqlIdentifier.fromCql(identifier).asCql(QUOTE_IDENTIFIERS);
+  }
+
+  private boolean changesSchema(String query) {
+    var normalized = query.trim().toLowerCase(Locale.ROOT);
+    return normalized.startsWith(CREATE_PREFIX)
+        || normalized.startsWith(DROP_PREFIX)
+        || normalized.startsWith(ALTER_PREFIX);
   }
 }
