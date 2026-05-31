@@ -6,10 +6,10 @@ A Docker-packaged Cassandra browser with a React 19 + TypeScript frontend and a 
 
 - Connect to Cassandra with host, port, datacenter, optional username/password, and optional keyspace.
 - Browse keyspaces and tables.
+- Create and drop keyspaces.
 - Inspect table schema and generated CQL.
 - Browse table data with page controls.
-- Run custom `SELECT` queries only.
-- Backend blocks mutation and schema-changing query keywords.
+- Execute single-statement Cassandra CQL from the Query tab.
 
 ## Run With Docker
 
@@ -79,9 +79,11 @@ The Vite dev server proxies `/api` to `http://localhost:8080`.
 
 - `POST /api/connections/test`
 - `GET /api/keyspaces`
+- `POST /api/keyspaces`
+- `DELETE /api/keyspaces/{keyspace}`
 - `GET /api/keyspaces/{keyspace}/tables`
 - `GET /api/keyspaces/{keyspace}/tables/{table}/schema`
 - `GET /api/keyspaces/{keyspace}/tables/{table}/data?page=&size=`
 - `POST /api/query`
 
-`POST /api/query` accepts only a single `SELECT` statement. Queries containing mutation or schema-changing keywords such as `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, or `CREATE` are rejected.
+`POST /api/query` accepts one Cassandra CQL statement. Statements that return rows are returned as tabular data; mutation and schema statements return a success message.

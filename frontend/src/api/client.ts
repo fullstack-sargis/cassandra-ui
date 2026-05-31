@@ -1,4 +1,4 @@
-import type { ConnectionRequest, DataPage, Keyspace, Table, TableSchema } from './types';
+import type { ConnectionRequest, DataPage, Keyspace, KeyspaceRequest, MutationResponse, Table, TableSchema } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -29,6 +29,17 @@ export const api = {
   keyspaces() {
     return request<Keyspace[]>('/keyspaces');
   },
+  createKeyspace(payload: KeyspaceRequest) {
+    return request<MutationResponse>('/keyspaces', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  dropKeyspace(keyspace: string) {
+    return request<MutationResponse>(`/keyspaces/${encodeURIComponent(keyspace)}`, {
+      method: 'DELETE',
+    });
+  },
   tables(keyspace: string) {
     return request<Table[]>(`/keyspaces/${encodeURIComponent(keyspace)}/tables`);
   },
@@ -38,10 +49,10 @@ export const api = {
   data(keyspace: string, table: string, page: number, size: number) {
     return request<DataPage>(`/keyspaces/${encodeURIComponent(keyspace)}/tables/${encodeURIComponent(table)}/data?page=${page}&size=${size}`);
   },
-  query(query: string, pageSize: number) {
+  query(query: string) {
     return request<DataPage>('/query', {
       method: 'POST',
-      body: JSON.stringify({ query, pageSize }),
+      body: JSON.stringify({ query }),
     });
   },
 };

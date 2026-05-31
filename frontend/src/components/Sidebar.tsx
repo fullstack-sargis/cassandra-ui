@@ -1,4 +1,5 @@
-import { Database, Table2 } from 'lucide-react';
+import { Database, Plus, Table2, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { Keyspace, Table } from '../api/types';
 
 type Props = {
@@ -7,11 +8,34 @@ type Props = {
   selectedKeyspace?: string;
   selectedTable?: string;
   loadingTables: boolean;
+  savingKeyspace: boolean;
   onSelectKeyspace: (keyspace: string) => void;
   onSelectTable: (table: string) => void;
+  onCreateKeyspace: (name: string, replicationFactor: number) => Promise<void>;
+  onDropKeyspace: (keyspace: string) => Promise<void>;
 };
 
-export function Sidebar({ keyspaces, tables, selectedKeyspace, selectedTable, loadingTables, onSelectKeyspace, onSelectTable }: Props) {
+export function Sidebar({
+  keyspaces,
+  tables,
+  selectedKeyspace,
+  selectedTable,
+  loadingTables,
+  savingKeyspace,
+  onSelectKeyspace,
+  onSelectTable,
+  onCreateKeyspace,
+  onDropKeyspace,
+}: Props) {
+  const [newKeyspace, setNewKeyspace] = useState('');
+  const [replicationFactor, setReplicationFactor] = useState(1);
+  const selectedKeyspaceMeta = keyspaces.find(keyspace => keyspace.name === selectedKeyspace);
+
+  const createKeyspace = async () => {
+    await onCreateKeyspace(newKeyspace, replicationFactor);
+    setNewKeyspace('');
+  };
+
   return (
     <aside className="sidebar">
       <section>
@@ -30,6 +54,37 @@ export function Sidebar({ keyspaces, tables, selectedKeyspace, selectedTable, lo
               {keyspace.system && <small>system</small>}
             </button>
           ))}
+        </div>
+        <div className="keyspace-form">
+          <label>
+            New keyspace
+            <input value={newKeyspace} onChange={event => setNewKeyspace(event.target.value)} placeholder="app_data" />
+          </label>
+          <label>
+            Replication factor
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={replicationFactor}
+              onChange={event => setReplicationFactor(Number(event.target.value))}
+            />
+          </label>
+          <div className="keyspace-actions">
+            <button type="button" className="primary-button compact-button" onClick={createKeyspace} disabled={savingKeyspace || !newKeyspace.trim()}>
+              <Plus size={16} />
+              Create
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              onClick={() => selectedKeyspace && onDropKeyspace(selectedKeyspace)}
+              disabled={savingKeyspace || !selectedKeyspace || selectedKeyspaceMeta?.system}
+              title="Drop selected keyspace"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
       </section>
 

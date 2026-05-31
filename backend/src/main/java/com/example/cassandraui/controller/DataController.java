@@ -30,6 +30,6 @@ public class DataController {
 
   @PostMapping("/api/query")
   public DataPageResponse query(@Valid @RequestBody QueryRequest request) {
-    return dataService.select(request.query(), request.pageSize());
+    return dataService.query(request.query(), request.pageSize());
   }
 }

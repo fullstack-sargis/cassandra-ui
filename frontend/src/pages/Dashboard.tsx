@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
 import type { ConnectionRequest, DataPage, Keyspace, Table, TableSchema } from '../api/types';
@@ -13,6 +13,7 @@ type Tab = 'schema' | 'data' | 'query';
 export function Dashboard() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [keyspaces, setKeyspaces] = useState<Keyspace[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -25,19 +26,23 @@ export function Dashboard() {
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [runningQuery, setRunningQuery] = useState(false);
+  const [savingKeyspace, setSavingKeyspace] = useState(false);
   const [tab, setTab] = useState<Tab>('schema');
   const [page, setPage] = useState(0);
+  const tablesRequestId = useRef(0);
+  const tableDataRequestId = useRef(0);
   const pageSize = 50;
 
   const connect = async (connection: ConnectionRequest) => {
     setConnecting(true);
     setError('');
+    setNotice('');
     try {
       await api.testConnection(connection);
       setConnected(true);
       const spaces = await api.keyspaces();
       setKeyspaces(spaces);
-      setSelectedKeyspace(connection.keyspace || spaces.find(item => !item.system)?.name || spaces[0]?.name);
+      selectKeyspace(connection.keyspace || spaces.find(item => !item.system)?.name || spaces[0]?.name);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -45,49 +50,167 @@ export function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedKeyspace) return;
-    setLoadingTables(true);
+  const selectKeyspace = (keyspace?: string) => {
+    tablesRequestId.current++;
+    tableDataRequestId.current++;
+    setSelectedKeyspace(keyspace);
     setSelectedTable(undefined);
     setSchema(undefined);
     setData(undefined);
+    setTables([]);
+    setPage(0);
+    setLoadingSchema(false);
+    setLoadingData(false);
+  };
+
+  const refreshKeyspaces = async (preferredKeyspace?: string, excludedKeyspace?: string) => {
+    const spaces = await api.keyspaces();
+    const selectableSpaces = excludedKeyspace
+      ? spaces.filter(item => item.name !== excludedKeyspace)
+      : spaces;
+    setKeyspaces(selectableSpaces);
+    const nextKeyspace =
+      preferredKeyspace && selectableSpaces.some(item => item.name === preferredKeyspace)
+        ? preferredKeyspace
+        : selectableSpaces.find(item => !item.system)?.name || selectableSpaces[0]?.name;
+    selectKeyspace(nextKeyspace);
+    return spaces;
+  };
+
+  useEffect(() => {
+    const requestId = ++tablesRequestId.current;
+    if (!selectedKeyspace) {
+      setTables([]);
+      return;
+    }
+    setLoadingTables(true);
     api.tables(selectedKeyspace)
-      .then(setTables)
-      .catch(err => setError(errorMessage(err)))
-      .finally(() => setLoadingTables(false));
+      .then(nextTables => {
+        if (requestId === tablesRequestId.current) {
+          setTables(nextTables);
+        }
+      })
+      .catch(err => {
+        if (requestId === tablesRequestId.current) {
+          setError(errorMessage(err));
+        }
+      })
+      .finally(() => {
+        if (requestId === tablesRequestId.current) {
+          setLoadingTables(false);
+        }
+      });
   }, [selectedKeyspace]);
 
   useEffect(() => {
     if (!selectedKeyspace || !selectedTable) return;
+    const requestId = ++tableDataRequestId.current;
     setLoadingSchema(true);
     setPage(0);
     api.schema(selectedKeyspace, selectedTable)
-      .then(setSchema)
-      .catch(err => setError(errorMessage(err)))
-      .finally(() => setLoadingSchema(false));
-    loadData(0);
+      .then(nextSchema => {
+        if (requestId === tableDataRequestId.current) {
+          setSchema(nextSchema);
+        }
+      })
+      .catch(err => {
+        if (requestId === tableDataRequestId.current) {
+          setError(errorMessage(err));
+        }
+      })
+      .finally(() => {
+        if (requestId === tableDataRequestId.current) {
+          setLoadingSchema(false);
+        }
+      });
+    loadData(selectedKeyspace, selectedTable, 0, requestId);
   }, [selectedKeyspace, selectedTable]);
 
-  const loadData = async (nextPage = page) => {
-    if (!selectedKeyspace || !selectedTable) return;
+  const loadData = async (
+    keyspace = selectedKeyspace,
+    table = selectedTable,
+    nextPage = page,
+    requestId = ++tableDataRequestId.current,
+  ) => {
+    if (!keyspace || !table) return;
     setLoadingData(true);
     setError('');
     try {
-      const pageData = await api.data(selectedKeyspace, selectedTable, nextPage, pageSize);
-      setData(pageData);
-      setPage(nextPage);
+      const pageData = await api.data(keyspace, table, nextPage, pageSize);
+      if (requestId === tableDataRequestId.current) {
+        setData(pageData);
+        setPage(nextPage);
+      }
     } catch (err) {
-      setError(errorMessage(err));
+      if (requestId === tableDataRequestId.current) {
+        setError(errorMessage(err));
+      }
     } finally {
-      setLoadingData(false);
+      if (requestId === tableDataRequestId.current) {
+        setLoadingData(false);
+      }
     }
   };
 
-  const runQuery = async (query: string, queryPageSize: number) => {
+  const createKeyspace = async (name: string, replicationFactor: number) => {
+    setSavingKeyspace(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await api.createKeyspace({ name, replicationFactor });
+      await refreshKeyspaces(name);
+      setNotice(response.message);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSavingKeyspace(false);
+    }
+  };
+
+  const dropKeyspace = async (keyspace: string) => {
+    if (!window.confirm(`Drop keyspace "${keyspace}"? This deletes its tables and data.`)) return;
+    setSavingKeyspace(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await api.dropKeyspace(keyspace);
+      setKeyspaces(current => current.filter(item => item.name !== keyspace));
+      await refreshKeyspaces(undefined, keyspace);
+      setNotice(response.message);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSavingKeyspace(false);
+    }
+  };
+
+  const runQuery = async (query: string) => {
     setRunningQuery(true);
     setError('');
+    setNotice('');
     try {
-      setQueryData(await api.query(query, queryPageSize));
+      const response = await api.query(query);
+      setQueryData(response);
+      if (response.message) {
+        setNotice(response.message);
+      }
+      const spaces = await api.keyspaces();
+      setKeyspaces(spaces);
+      const keyspaceExists = selectedKeyspace && spaces.some(item => item.name === selectedKeyspace);
+      if (keyspaceExists) {
+        const nextTables = await api.tables(selectedKeyspace);
+        setTables(nextTables);
+        if (selectedTable && nextTables.some(item => item.name === selectedTable)) {
+          await loadData(selectedKeyspace, selectedTable, 0);
+          setSchema(await api.schema(selectedKeyspace, selectedTable));
+        } else if (selectedTable) {
+          setSelectedTable(undefined);
+          setSchema(undefined);
+          setData(undefined);
+        }
+      } else if (selectedKeyspace) {
+        selectKeyspace(spaces.find(item => !item.system)?.name || spaces[0]?.name);
+      }
       setTab('query');
     } catch (err) {
       setError(errorMessage(err));
@@ -107,6 +230,8 @@ export function Dashboard() {
         </div>
       )}
 
+      {notice && <div className="notice">{notice}</div>}
+
       <div className="workspace">
         <Sidebar
           keyspaces={keyspaces}
@@ -114,8 +239,11 @@ export function Dashboard() {
           selectedKeyspace={selectedKeyspace}
           selectedTable={selectedTable}
           loadingTables={loadingTables}
-          onSelectKeyspace={setSelectedKeyspace}
+          savingKeyspace={savingKeyspace}
+          onSelectKeyspace={selectKeyspace}
           onSelectTable={setSelectedTable}
+          onCreateKeyspace={createKeyspace}
+          onDropKeyspace={dropKeyspace}
         />
 
         <section className="content-panel">
@@ -136,14 +264,14 @@ export function Dashboard() {
           {tab === 'data' && (
             <>
               <div className="table-actions">
-                <button className="icon-button" onClick={() => loadData(page)} disabled={!selectedTable || loadingData} title="Refresh">
+                <button className="icon-button" onClick={() => loadData(selectedKeyspace, selectedTable, page)} disabled={!selectedTable || loadingData} title="Refresh">
                   <RefreshCw size={17} />
                 </button>
-                <button className="icon-button" onClick={() => loadData(Math.max(0, page - 1))} disabled={page === 0 || loadingData} title="Previous page">
+                <button className="icon-button" onClick={() => loadData(selectedKeyspace, selectedTable, Math.max(0, page - 1))} disabled={page === 0 || loadingData} title="Previous page">
                   <ChevronLeft size={17} />
                 </button>
                 <span className="page-indicator">Page {page + 1}</span>
-                <button className="icon-button" onClick={() => loadData(page + 1)} disabled={!data?.hasMore || loadingData} title="Next page">
+                <button className="icon-button" onClick={() => loadData(selectedKeyspace, selectedTable, page + 1)} disabled={!data?.hasMore || loadingData} title="Next page">
                   <ChevronRight size={17} />
                 </button>
               </div>
