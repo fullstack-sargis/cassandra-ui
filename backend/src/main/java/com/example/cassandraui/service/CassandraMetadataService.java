@@ -30,7 +30,7 @@ public class CassandraMetadataService {
   private static final int DEFAULT_REPLICATION_FACTOR = 1;
   private static final int MAX_REPLICATION_FACTOR = 10;
   private static final int MIN_REPLICATION_FACTOR = 1;
-  private static final boolean DEFAULT_DURABLE_WRITES = true;
+  private static final boolean DURABLE_WRITES = true;
   private static final boolean QUOTE_IDENTIFIERS = true;
 
   private final ConnectionService connectionService;
@@ -58,7 +58,7 @@ public class CassandraMetadataService {
         .toList();
   }
 
-  public void createKeyspace(String name, Integer replicationFactor, Boolean durableWrites) {
+  public void createKeyspace(String name, Integer replicationFactor) {
     if (name == null || name.isBlank()) {
       throw new BadRequestException(KEYSPACE_NAME_REQUIRED);
     }
@@ -67,14 +67,13 @@ public class CassandraMetadataService {
             replicationFactor == null ? DEFAULT_REPLICATION_FACTOR : replicationFactor,
             MIN_REPLICATION_FACTOR,
             MAX_REPLICATION_FACTOR);
-    var normalizedDurableWrites = durableWrites == null ? DEFAULT_DURABLE_WRITES : durableWrites;
     var statement =
         """
         CREATE KEYSPACE %s
         WITH replication = {'class': 'SimpleStrategy', 'replication_factor': %d}
         AND durable_writes = %s
         """
-            .formatted(quote(name), normalizedReplicationFactor, normalizedDurableWrites);
+            .formatted(quote(name), normalizedReplicationFactor, DURABLE_WRITES);
     executeSchemaChange(statement);
   }
 

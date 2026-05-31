@@ -11,7 +11,7 @@ type Props = {
   savingKeyspace: boolean;
   onSelectKeyspace: (keyspace: string) => void;
   onSelectTable: (table: string) => void;
-  onCreateKeyspace: (name: string, replicationFactor: number, durableWrites: boolean) => Promise<void>;
+  onCreateKeyspace: (name: string, replicationFactor: number) => Promise<void>;
   onDropKeyspace: (keyspace: string) => Promise<void>;
 };
 
@@ -29,11 +29,10 @@ export function Sidebar({
 }: Props) {
   const [newKeyspace, setNewKeyspace] = useState('');
   const [replicationFactor, setReplicationFactor] = useState(1);
-  const [durableWrites, setDurableWrites] = useState(true);
   const selectedKeyspaceMeta = keyspaces.find(keyspace => keyspace.name === selectedKeyspace);
 
   const createKeyspace = async () => {
-    await onCreateKeyspace(newKeyspace, replicationFactor, durableWrites);
+    await onCreateKeyspace(newKeyspace, replicationFactor);
     setNewKeyspace('');
   };
 
@@ -70,14 +69,6 @@ export function Sidebar({
               value={replicationFactor}
               onChange={event => setReplicationFactor(Number(event.target.value))}
             />
-          </label>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={durableWrites}
-              onChange={event => setDurableWrites(event.target.checked)}
-            />
-            Durable writes
           </label>
           <div className="keyspace-actions">
             <button type="button" className="primary-button compact-button" onClick={createKeyspace} disabled={savingKeyspace || !newKeyspace.trim()}>

@@ -15,7 +15,6 @@ export type Keyspace = {
 export type KeyspaceRequest = {
   name: string;
   replicationFactor: number;
-  durableWrites: boolean;
 };
 
 export type Table = {

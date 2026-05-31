@@ -32,8 +32,7 @@ public class MetadataController {
 
   @PostMapping
   public MutationResponse createKeyspace(@Valid @RequestBody KeyspaceRequest request) {
-    metadataService.createKeyspace(
-        request.name(), request.replicationFactor(), request.durableWrites());
+    metadataService.createKeyspace(request.name(), request.replicationFactor());
     return new MutationResponse("Keyspace created.");
   }
 

@@ -152,12 +152,12 @@ export function Dashboard() {
     }
   };
 
-  const createKeyspace = async (name: string, replicationFactor: number, durableWrites: boolean) => {
+  const createKeyspace = async (name: string, replicationFactor: number) => {
     setSavingKeyspace(true);
     setError('');
     setNotice('');
     try {
-      const response = await api.createKeyspace({ name, replicationFactor, durableWrites });
+      const response = await api.createKeyspace({ name, replicationFactor });
       await refreshKeyspaces(name);
       setNotice(response.message);
     } catch (err) {
